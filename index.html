@@ -5,20 +5,97 @@
 		<meta charset="utf-8">
 		<title>RoboCalc</title>
 		<style>
+               /* https://threejsfundamentals.org/threejs/lessons/threejs-align-html-elements-to-3d.html*/
 			body { margin: 10}
+            #container {
+              position: relative;  /* makes this the origin of its children */
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+            }
+            #labels {
+              position: absolute;  /* let us position ourself inside the container */
+              left: 0;             /* make our position the top left of the container */
+              top: 0;
+              color: white;
+            }
+
+            #labels>div {
+              position: absolute;  /* let us position them inside the container */
+              left: 0;             /* make their default position the top left of the container */
+              top: 0;
+              cursor: pointer;     /* change the cursor to a hand when over us */
+              font-size: large;
+              user-select: none;   /* don't let the text get selected */
+              text-shadow:         /* create a black outline */
+                -1px -1px 0 #000,
+                 0   -1px 0 #000,
+                 1px -1px 0 #000,
+                 1px  0   0 #000,
+                 1px  1px 0 #000,
+                 0    1px 0 #000,
+                -1px  1px 0 #000,
+                -1px  0   0 #000;
+            }
+            #labels>div:hover {
+              color: red;
+            }
+
 		</style>
 	</head>
 	<body>
-      
+
         <script type="module">
+           import * as THREE from './node_modules/three/build/three.module.js';
+
             // View: Extra Three.js classes
-			import * as THREE from './node_modules/three/build/three.module.js';
+
+
+            // Thanks to: https://codepen.io/smtrd/pen/MZVWpN?editors=0110
+            function createTextLabel(text, mainCamera) {
+                var div = document.createElement('div');
+                div.className = 'text-label';
+                div.style.position = 'absolute';
+                div.style.width = 100;
+                div.style.height = 100;
+                div.innerHTML = text;
+                div.style.zIndex = 50;
+                
+                return {
+                  element: div,
+                  parent: false,
+                  position: new THREE.Vector3(0,0,0),
+                  setHTML: function(html) {
+                    this.innerHTML = html;
+                  },
+                  setParent: function(threejsobj) {
+                    this.parent = threejsobj;
+                  },
+                  updatePosition: function() {
+                    if(parent) {
+                      this.position.copy(this.parent.origin);
+                    }
+                    var coords2d = this.get2DCoords(this.position, mainCamera);
+                    this.element.style.left = coords2d.x + 'px';
+                    this.element.style.top = coords2d.y + 'px';
+                  },
+                  get2DCoords: function(position, camera) {
+                    const projectionVector = position.project(camera);
+                    let canvas = document.getElementById('canvas');
+                    let vector = new THREE.Vector3();
+                    vector.x = (projectionVector.x + 1)/2 * canvas.width;
+                    vector.y = -(projectionVector.y - 1)/2 * canvas.height;
+                    return vector;
+                  }
+                };
+              }
+
             /** 
              *  Based off AxesHelper from three js
              */
             class TfHelper extends THREE.LineSegments {
 
-	            constructor( tfMatrix, size=1 ) {
+	            constructor( name, parentName, tfMatrix, size=0.25 ) {
                     // TF matrix is a 4x4 matrix
 
                     let originMatrix = new THREE.Matrix4();
@@ -31,12 +108,6 @@
                     yMatrix.setPosition(new THREE.Vector3(0,size,0));
                     zMatrix.setPosition(new THREE.Vector3(0,0,size));
 
-                    console.log("TF MATRIX", tfMatrix);
-                    console.log(originMatrix);
-                    console.log(xMatrix);
-                    console.log(yMatrix);
-                    console.log(zMatrix);
-
                     const originFinalMatrix = new THREE.Matrix4();
                     const xFinalMatrix = new THREE.Matrix4();
                     const yFinalMatrix = new THREE.Matrix4();
@@ -45,15 +116,9 @@
                     originFinalMatrix.multiplyMatrices(tfMatrix, originMatrix);
                     yFinalMatrix.multiplyMatrices(tfMatrix, yMatrix);
                     xFinalMatrix.multiplyMatrices(tfMatrix, xMatrix);
-
                     zFinalMatrix.multiplyMatrices(tfMatrix, zMatrix);
 
-                    console.log("ORIGIN FINAL MATRIX ", originFinalMatrix);
-
                     const originPoint = new THREE.Vector3().setFromMatrixPosition(originFinalMatrix);
-
-                    console.log("origin point ", originPoint);
-
                     const xPoint = new THREE.Vector3().setFromMatrixPosition(xFinalMatrix);
                     const yPoint = new THREE.Vector3().setFromMatrixPosition(yFinalMatrix);
                     const zPoint = new THREE.Vector3().setFromMatrixPosition(zFinalMatrix);
@@ -64,7 +129,7 @@
 			            originPoint.x, originPoint.y, originPoint.z,	   zPoint.x, zPoint.y, zPoint.z
 		            ];
 
-                    console.log(vertices);
+
 
 		            const colors = [
 			            1, 0, 0,	1, 0.6, 0,
@@ -81,7 +146,7 @@
 		            super( geometry, material );
 
 		            this.type = 'TfHelper';
-
+                    this.origin = originPoint;
 	            }
             }
 
@@ -89,7 +154,6 @@
 
             // Controller
              function addTransformFromInput() {
-	            console.log('add transform from input');
 	            const position = new THREE.Vector3(parseFloat(document.getElementById('x').value), 
 		                                       parseFloat(document.getElementById('y').value),
 		                                       parseFloat(document.getElementById('z').value));
@@ -111,15 +175,21 @@
 
             function addTransform(name, parentName, position, quaternion) {
                 let tfMatrix = new THREE.Matrix4().compose(position, quaternion, new THREE.Vector3(1,1,1));
-
-                const tfHelper = new TfHelper(tfMatrix);
+                const tfHelper = new TfHelper(name, parentName, tfMatrix);
                 scene.add(tfHelper);
+
+                // Note - using external variable camera
+              var text = createTextLabel(name, camera);
+              text.setHTML("label_" + name);
+              text.setParent(tfHelper);
+              document.getElementById("labels").appendChild(text.element);
+
+               // Note - using external variable allTfFrames
+              allTfFrames[name] = {"text": text, "tfHelper": tfHelper};
             }
 
             // Exporting outside the module            
             window.addTransformFromInput = addTransformFromInput;
-
-
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -132,18 +202,15 @@
 
             const renderer = new THREE.WebGLRenderer();
             renderer.setSize( window.innerWidth, window.innerHeight );
-            document.body.appendChild( renderer.domElement );
+            document.getElementById('container').appendChild( renderer.domElement );
+            renderer.domElement.id = "canvas";
 
             const size = 10;
             const divisions = 10;
             const gridHelper = new THREE.GridHelper(size, divisions);
             scene.add(gridHelper);
-
-	        //let geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
-	        //let material = new THREE.MeshNormalMaterial();
-	        //let mesh = new THREE.Mesh( geometry, material );
-	        //scene.add( mesh );
-
+            camera.position.z = 5;
+            camera.getWorldPosition();
 
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.target.set(0,0,0);
@@ -151,10 +218,16 @@
             // Dict of name: TF object (has parent & children)
             let allTfFrames = {};
 
+
+/////////////////////////////////////////////
             function animate() {
 	            requestAnimationFrame( animate );
                 controls.update();
 	            renderer.render( scene, camera );
+
+                for (var name in allTfFrames) {
+                    allTfFrames[name]["text"].updatePosition();
+                }
             }
             animate();
         </script>
@@ -165,15 +238,16 @@
         <p>Reference frame: </p><select name="Reference frame" id="ref_frame">
           <option value="world">world</option>
         </select>
-
-        <p>x: </p><input id="x" value=0>
-        <p>y: </p><input id="y" value=1>
-        <p>z: </p><input id="z" value=2>
-
-        <p>roll: </p><input id="roll" value=0>
-        <p>pitch: </p><input id="pitch" value=0>
-        <p>yaw: </p><input id="yaw" value=0>
+        <br/>
+           x: <input id="x" value=0> y: <input id="y" value=1> z: <input id="z" value=2>
+            <br/>
+        roll: <input id="roll" value=0> pitch: <input id="pitch" value=0> yaw: <input id="yaw" value=0>
+<br/>
         <button onclick="addTransformFromInput()">Add Transform</button>
+
+  <div id="container">
+    <div id="labels"></div>
+  </div>
 
 
 	</body>
