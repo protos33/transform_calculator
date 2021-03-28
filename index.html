@@ -1,18 +1,18 @@
-<h1>Transform Calculator</h1>
+ <h1>Transform Calculator</h1>
 
 <html>
 	<head>
 		<meta charset="utf-8">
 		<title>RoboCalc</title>
 		<style>
-			body { margin: 0; }
+			body { margin: 10}
 		</style>
 	</head>
 	<body>
-		<script src="js/three.js"></script>
-        <script>
+      
+        <script type="module">
             // View: Extra Three.js classes
-
+			import * as THREE from './node_modules/three/build/three.module.js';
             /** 
              *  Based off AxesHelper from three js
              */
@@ -21,30 +21,47 @@
 	            constructor( tfMatrix, size=1 ) {
                     // TF matrix is a 4x4 matrix
 
-                    const originMatrix = new THREE.Matrix4();
-                    const xMatrix = new THREE.Matrix4();
-                    const yMatrix = new THREE.Matrix4();
-                    const zMatrix = new THREE.Matrix4();
+                    let originMatrix = new THREE.Matrix4();
+                    let xMatrix = new THREE.Matrix4();
+                    let yMatrix = new THREE.Matrix4();
+                    let zMatrix = new THREE.Matrix4();
 
                     originMatrix.setPosition(new THREE.Vector3(0,0,0));
                     xMatrix.setPosition(new THREE.Vector3(size,0,0));
                     yMatrix.setPosition(new THREE.Vector3(0,size,0));
                     zMatrix.setPosition(new THREE.Vector3(0,0,size));
 
-                    const originFinalMatrix = tfMatrix.multiply(originMatrix);
-                    const xFinalMatrix = tfMatrix.multiply(xMatrix);
-                    const yFinalMatrix = tfMatrix.multiply(yMatrix);
-                    const zFinalMatrix = tfMatrix.multiply(zMatrix);
+                    console.log("TF MATRIX", tfMatrix);
+                    console.log(originMatrix);
+                    console.log(xMatrix);
+                    console.log(yMatrix);
+                    console.log(zMatrix);
 
-                    const originPoint = new THREE.Vector3().setFromMatrixPosition(originMatrix);
+                    const originFinalMatrix = new THREE.Matrix4();
+                    const xFinalMatrix = new THREE.Matrix4();
+                    const yFinalMatrix = new THREE.Matrix4();
+                    const zFinalMatrix = new THREE.Matrix4();
+
+                    originFinalMatrix.multiplyMatrices(tfMatrix, originMatrix);
+                    yFinalMatrix.multiplyMatrices(tfMatrix, yMatrix);
+                    xFinalMatrix.multiplyMatrices(tfMatrix, xMatrix);
+
+                    zFinalMatrix.multiplyMatrices(tfMatrix, zMatrix);
+
+                    console.log("ORIGIN FINAL MATRIX ", originFinalMatrix);
+
+                    const originPoint = new THREE.Vector3().setFromMatrixPosition(originFinalMatrix);
+
+                    console.log("origin point ", originPoint);
+
                     const xPoint = new THREE.Vector3().setFromMatrixPosition(xFinalMatrix);
                     const yPoint = new THREE.Vector3().setFromMatrixPosition(yFinalMatrix);
                     const zPoint = new THREE.Vector3().setFromMatrixPosition(zFinalMatrix);
 
 		            const vertices = [
-			            originPoint.x, originPoint.x, originPoint.x,	   xPoint.x, yPoint.x, zPoint.x,
-			            originPoint.y, originPoint.y, originPoint.y,	   xPoint.y, yPoint.y, zPoint.y,
-			            originPoint.z, originPoint.z, originPoint.z,	   xPoint.z, yPoint.z, zPoint.z
+			            originPoint.x, originPoint.y, originPoint.z,	   xPoint.x, xPoint.y, xPoint.z,
+			            originPoint.x, originPoint.y, originPoint.z,	   yPoint.x, yPoint.y, yPoint.z,
+			            originPoint.x, originPoint.y, originPoint.z,	   zPoint.x, zPoint.y, zPoint.z
 		            ];
 
                     console.log(vertices);
@@ -59,7 +76,7 @@
 		            geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
 		            geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
 
-		            const material = new THREE.LineBasicMaterial( { vertexColors: true, toneMapped: false } );
+		            const material = new THREE.LineBasicMaterial( { vertexColors: true, linewidth: 10 } );
 
 		            super( geometry, material );
 
@@ -68,39 +85,17 @@
 	            }
             }
 
-          </script>
-          <script>
-            // View
+/////////////////////////////////
 
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-
-            const renderer = new THREE.WebGLRenderer();
-            renderer.setSize( window.innerWidth, window.innerHeight );
-            document.body.appendChild( renderer.domElement );
-
-            camera.position.z = 5;
-
-            // Dict of name: TF object (has parent & children)
-            let allTfFrames = {};
-
-            function animate() {
-	            requestAnimationFrame( animate );
-	            renderer.render( scene, camera );
-            }
-            animate();
-        </script>
-
-		<script>
             // Controller
              function addTransformFromInput() {
 	            console.log('add transform from input');
-	            const position = new THREE.Vector3(document.getElementById('x').value, 
-		                                       document.getElementById('y').value,
-		                                       document.getElementById('z').value);
-	            const euler = new THREE.Euler(document.getElementById('r').value, 
-		                                  document.getElementById('p').value, 
-		                                  document.getElementById('y').value,
+	            const position = new THREE.Vector3(parseFloat(document.getElementById('x').value), 
+		                                       parseFloat(document.getElementById('y').value),
+		                                       parseFloat(document.getElementById('z').value));
+	            const euler = new THREE.Euler(THREE.MathUtils.degToRad(parseFloat(document.getElementById('roll').value)), 
+		                                  THREE.MathUtils.degToRad(parseFloat(document.getElementById('pitch').value)), 
+		                                  THREE.MathUtils.degToRad(parseFloat(document.getElementById('yaw').value)),
 		                                  'XYZ');
 	            const quaternion = new THREE.Quaternion().setFromEuler(euler);
 	            const name = document.getElementById('name').value;
@@ -115,13 +110,56 @@
 
 
             function addTransform(name, parentName, position, quaternion) {
-                let m = new THREE.Matrix4();
-                m.compose(position, quaternion, new THREE.Vector3(1, 1, 1));
-                const tfHelper = new TfHelper(m);
+                let tfMatrix = new THREE.Matrix4().compose(position, quaternion, new THREE.Vector3(1,1,1));
+
+                const tfHelper = new TfHelper(tfMatrix);
                 scene.add(tfHelper);
             }
 
-		</script>
+            // Exporting outside the module            
+            window.addTransformFromInput = addTransformFromInput;
+
+
+
+///////////////////////////////////////////////////////////////////////////////////
+
+			import { TrackballControls } from './node_modules/three/examples/jsm/controls/TrackballControls.js';
+			import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            camera.position.z = 1;
+
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            document.body.appendChild( renderer.domElement );
+
+            const size = 10;
+            const divisions = 10;
+            const gridHelper = new THREE.GridHelper(size, divisions);
+            scene.add(gridHelper);
+
+	        //let geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
+	        //let material = new THREE.MeshNormalMaterial();
+	        //let mesh = new THREE.Mesh( geometry, material );
+	        //scene.add( mesh );
+
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0,0,0);
+
+            // Dict of name: TF object (has parent & children)
+            let allTfFrames = {};
+
+            function animate() {
+	            requestAnimationFrame( animate );
+                controls.update();
+	            renderer.render( scene, camera );
+            }
+            animate();
+        </script>
+
+
 
         <p>Name: </p><input id="name" value="name">
         <p>Reference frame: </p><select name="Reference frame" id="ref_frame">
@@ -132,9 +170,9 @@
         <p>y: </p><input id="y" value=1>
         <p>z: </p><input id="z" value=2>
 
-        <p>r: </p><input id="r" value=0>
-        <p>p: </p><input id="p" value=0>
-        <p>y: </p><input id="y" value=0>
+        <p>roll: </p><input id="roll" value=0>
+        <p>pitch: </p><input id="pitch" value=0>
+        <p>yaw: </p><input id="yaw" value=0>
         <button onclick="addTransformFromInput()">Add Transform</button>
 
 
