@@ -46,11 +46,11 @@
 	<body>
 
         <script type="module">
-           import * as THREE from './node_modules/three/build/three.module.js';
+            import * as THREE from './node_modules/three/build/three.module.js';
 
-            // View: Extra Three.js classes
-
-
+            /** 
+             * Creating text label
+             */
             // Thanks to: https://codepen.io/smtrd/pen/MZVWpN?editors=0110
             function createTextLabel(text, mainCamera) {
                 var div = document.createElement('div');
@@ -60,35 +60,37 @@
                 div.style.height = 100;
                 div.innerHTML = text;
                 div.style.zIndex = 50;
-                
+
                 return {
-                  element: div,
-                  parent: false,
-                  position: new THREE.Vector3(0,0,0),
-                  setHTML: function(html) {
-                    this.innerHTML = html;
-                  },
-                  setParent: function(threejsobj) {
-                    this.parent = threejsobj;
-                  },
-                  updatePosition: function() {
-                    if(parent) {
-                      this.position.copy(this.parent.origin);
+                    element: div,
+                    parent: false,
+                    position: new THREE.Vector3(0,0,0),
+                    setHTML: function(html) {
+                        this.innerHTML = html;
+                    },
+                    setParent: function(threejsobj) {
+                        this.parent = threejsobj;
+                    },
+                    updatePosition: function() {
+                        if(parent) {
+                            this.position.copy(this.parent.origin);
+                        }
+                        var coords2d = this.get2DCoords(this.position, mainCamera);
+                        this.element.style.left = coords2d.x + 'px';
+                        this.element.style.top = coords2d.y + 'px';
+                    },
+                    get2DCoords: function(position, camera) {
+                        const projectionVector = position.project(camera);
+                        let canvas = document.getElementById('canvas');
+                        let vector = new THREE.Vector3();
+                        vector.x = (projectionVector.x + 1)/2 * canvas.width;
+                        vector.y = -(projectionVector.y - 1)/2 * canvas.height;
+                        return vector;
                     }
-                    var coords2d = this.get2DCoords(this.position, mainCamera);
-                    this.element.style.left = coords2d.x + 'px';
-                    this.element.style.top = coords2d.y + 'px';
-                  },
-                  get2DCoords: function(position, camera) {
-                    const projectionVector = position.project(camera);
-                    let canvas = document.getElementById('canvas');
-                    let vector = new THREE.Vector3();
-                    vector.x = (projectionVector.x + 1)/2 * canvas.width;
-                    vector.y = -(projectionVector.y - 1)/2 * canvas.height;
-                    return vector;
-                  }
                 };
-              }
+            }
+
+//////////////////////////////////////////////////////////////////
 
             /** 
              *  Based off AxesHelper from three js
@@ -129,8 +131,6 @@
 			            originPoint.x, originPoint.y, originPoint.z,	   zPoint.x, zPoint.y, zPoint.z
 		            ];
 
-
-
 		            const colors = [
 			            1, 0, 0,	1, 0.6, 0,
 			            0, 1, 0,	0.6, 1, 0,
@@ -150,9 +150,51 @@
 	            }
             }
 
-/////////////////////////////////
+        class TfObject {
+            constructor(tfName, parent, position, quaternion) {
+                this.tfName = tfName;
+                this.parent = parent;
+                this.parentToSelf = new THREE.Matrix4().compose(position, quaternion, new THREE.Vector3(1,1,1));
+                this.tfMatrix = this.getWorldToSelfTf();
 
-            // Controller
+                // TF helper
+                this.tfHelper = new TfHelper(this.tfName, this.parentName, this.tfMatrix);
+
+            }
+
+            /**
+             * No, this is not the most efficient way to do this
+             */
+            getWorldToSelfTf() {
+                console.log('world to self tf');
+                console.log(this.tfName);
+                console.log(this.parentToSelf);
+                if (this.tfName == "world") {
+                    return new THREE.Matrix4().identity();
+                } else {
+                    console.log(this.tfName);
+                    const worldToSelf = new THREE.Matrix4();
+                    const parentToSelf = this.parentToSelf;
+                    const worldToParent = this.parent.getWorldToSelfTf();
+                    worldToSelf.multiplyMatrices(worldToParent, parentToSelf);
+                    return worldToSelf;
+                }
+            }
+        }
+
+        function getTfBetween(tfObjectA, tfObjectB) {
+            const worldToA = tfObjectA.getWorldToSelfTf();
+            const worldToB = tfObjectB.getWorldToSelfTf();
+            const aToB = new THREE.Matrix4();
+            aToB.multiplyMatrices(worldToA.inverse(), worldToB);
+            return aToB;
+        }
+
+//////////////////////////////////////////////////////////////////
+
+            /** 
+             * Get input
+             */
              function addTransformFromInput() {
 	            const position = new THREE.Vector3(parseFloat(document.getElementById('x').value), 
 		                                       parseFloat(document.getElementById('y').value),
@@ -163,7 +205,7 @@
 		                                  'XYZ');
 	            const quaternion = new THREE.Quaternion().setFromEuler(euler);
 	            const name = document.getElementById('name').value;
-	            const selectParent = document.getElementById("ref_frame");
+	            const selectParent = document.getElementById("ref_frame_select");
 	            let parentName = selectParent.options[selectParent.selectedIndex].text;
 	            addTransform(name, parentName, position, quaternion);
 	            console.log(name);
@@ -174,18 +216,22 @@
 
 
             function addTransform(name, parentName, position, quaternion) {
-                let tfMatrix = new THREE.Matrix4().compose(position, quaternion, new THREE.Vector3(1,1,1));
-                const tfHelper = new TfHelper(name, parentName, tfMatrix);
-                scene.add(tfHelper);
+                // Note - using external variable allTfs, scene, camera
+                let parent = null;
+                if (name != "world") {
+                    parent = allTfs[parentName];
+                }             
+                const tfObject = new TfObject(name, parent, position, quaternion); 
+                allTfs[name] = tfObject;
+                scene.add(tfObject.tfHelper);
+               
+                // Text - for some reason this doesn't work if created inside the TFObject
+                tfObject.text = createTextLabel(name, camera);
+                tfObject.text.setHTML("label_" + name);
+                tfObject.text.setParent(tfObject.tfHelper);
+               document.getElementById("labels").appendChild(tfObject.text.element);
+                tfObject.text.updatePosition();
 
-                // Note - using external variable camera
-              var text = createTextLabel(name, camera);
-              text.setHTML("label_" + name);
-              text.setParent(tfHelper);
-              document.getElementById("labels").appendChild(text.element);
-
-               // Note - using external variable allTfFrames
-              allTfFrames[name] = {"text": text, "tfHelper": tfHelper};
             }
 
             // Exporting outside the module            
@@ -210,13 +256,17 @@
             const gridHelper = new THREE.GridHelper(size, divisions);
             scene.add(gridHelper);
             camera.position.z = 5;
-            camera.getWorldPosition();
+            camera.getWorldPosition();                
+
 
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.target.set(0,0,0);
 
             // Dict of name: TF object (has parent & children)
-            let allTfFrames = {};
+            let allTfs = {};
+
+            
+            addTransform("world", undefined, new THREE.Vector3(), new THREE.Quaternion());
 
 
 /////////////////////////////////////////////
@@ -225,18 +275,28 @@
                 controls.update();
 	            renderer.render( scene, camera );
 
-                for (var name in allTfFrames) {
-                    allTfFrames[name]["text"].updatePosition();
+                for (var name in allTfs) {
+                    // Update label location
+                    allTfs[name].text.updatePosition();
+
+                    // Add to dropdown box
+                    const refFrameSelect = document.getElementById("ref_frame_select");
+                    let option = document.createElement("option");
+                    option.id = name;
+                    option.text = name;
+                    option.value = name;
+                    if (refFrameSelect.options.namedItem(name) == null) {
+                        refFrameSelect.add(option);
+                    }
                 }
             }
             animate();
         </script>
-
-
+        
+        <!-- HTML -->
 
         <p>Name: </p><input id="name" value="name">
-        <p>Reference frame: </p><select name="Reference frame" id="ref_frame">
-          <option value="world">world</option>
+        <p>Reference frame: </p><select name="Reference frame" id="ref_frame_select">
         </select>
         <br/>
            x: <input id="x" value=0> y: <input id="y" value=1> z: <input id="z" value=2>
