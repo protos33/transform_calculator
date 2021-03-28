@@ -3,15 +3,75 @@
 <html>
 	<head>
 		<meta charset="utf-8">
-		<title>My first three.js app</title>
+		<title>RoboCalc</title>
 		<style>
 			body { margin: 0; }
 		</style>
 	</head>
 	<body>
 		<script src="js/three.js"></script>
-		<script>
-			// Our Javascript will go here.
+        <script>
+            // View: Extra Three.js classes
+
+            /** 
+             *  Based off AxesHelper from three js
+             */
+            class TfHelper extends THREE.LineSegments {
+
+	            constructor( tfMatrix, size=1 ) {
+                    // TF matrix is a 4x4 matrix
+
+                    const originMatrix = new THREE.Matrix4();
+                    const xMatrix = new THREE.Matrix4();
+                    const yMatrix = new THREE.Matrix4();
+                    const zMatrix = new THREE.Matrix4();
+
+                    originMatrix.setPosition(new THREE.Vector3(0,0,0));
+                    xMatrix.setPosition(new THREE.Vector3(size,0,0));
+                    yMatrix.setPosition(new THREE.Vector3(0,size,0));
+                    zMatrix.setPosition(new THREE.Vector3(0,0,size));
+
+                    const originFinalMatrix = tfMatrix.multiply(originMatrix);
+                    const xFinalMatrix = tfMatrix.multiply(xMatrix);
+                    const yFinalMatrix = tfMatrix.multiply(yMatrix);
+                    const zFinalMatrix = tfMatrix.multiply(zMatrix);
+
+                    const originPoint = new THREE.Vector3().setFromMatrixPosition(originMatrix);
+                    const xPoint = new THREE.Vector3().setFromMatrixPosition(xFinalMatrix);
+                    const yPoint = new THREE.Vector3().setFromMatrixPosition(yFinalMatrix);
+                    const zPoint = new THREE.Vector3().setFromMatrixPosition(zFinalMatrix);
+
+		            const vertices = [
+			            originPoint.x, originPoint.x, originPoint.x,	   xPoint.x, yPoint.x, zPoint.x,
+			            originPoint.y, originPoint.y, originPoint.y,	   xPoint.y, yPoint.y, zPoint.y,
+			            originPoint.z, originPoint.z, originPoint.z,	   xPoint.z, yPoint.z, zPoint.z
+		            ];
+
+                    console.log(vertices);
+
+		            const colors = [
+			            1, 0, 0,	1, 0.6, 0,
+			            0, 1, 0,	0.6, 1, 0,
+			            0, 0, 1,	0, 0.6, 1
+		            ];
+
+		            const geometry = new THREE.BufferGeometry();
+		            geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+		            geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+
+		            const material = new THREE.LineBasicMaterial( { vertexColors: true, toneMapped: false } );
+
+		            super( geometry, material );
+
+		            this.type = 'TfHelper';
+
+	            }
+            }
+
+          </script>
+          <script>
+            // View
+
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
@@ -19,19 +79,64 @@
             renderer.setSize( window.innerWidth, window.innerHeight );
             document.body.appendChild( renderer.domElement );
 
-            const geometry = new THREE.BoxGeometry();
-            const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-            const cube = new THREE.Mesh( geometry, material );
-            scene.add( cube );
-
             camera.position.z = 5;
+
+            // Dict of name: TF object (has parent & children)
+            let allTfFrames = {};
 
             function animate() {
 	            requestAnimationFrame( animate );
 	            renderer.render( scene, camera );
             }
             animate();
+        </script>
+
+		<script>
+            // Controller
+             function addTransformFromInput() {
+	            console.log('add transform from input');
+	            const position = new THREE.Vector3(document.getElementById('x').value, 
+		                                       document.getElementById('y').value,
+		                                       document.getElementById('z').value);
+	            const euler = new THREE.Euler(document.getElementById('r').value, 
+		                                  document.getElementById('p').value, 
+		                                  document.getElementById('y').value,
+		                                  'XYZ');
+	            const quaternion = new THREE.Quaternion().setFromEuler(euler);
+	            const name = document.getElementById('name').value;
+	            const selectParent = document.getElementById("ref_frame");
+	            let parentName = selectParent.options[selectParent.selectedIndex].text;
+	            addTransform(name, parentName, position, quaternion);
+	            console.log(name);
+	            console.log(parentName);
+	            console.log(position);
+	            console.log(quaternion);
+            }
+
+
+            function addTransform(name, parentName, position, quaternion) {
+                let m = new THREE.Matrix4();
+                m.compose(position, quaternion, new THREE.Vector3(1, 1, 1));
+                const tfHelper = new TfHelper(m);
+                scene.add(tfHelper);
+            }
 
 		</script>
+
+        <p>Name: </p><input id="name" value="name">
+        <p>Reference frame: </p><select name="Reference frame" id="ref_frame">
+          <option value="world">world</option>
+        </select>
+
+        <p>x: </p><input id="x" value=0>
+        <p>y: </p><input id="y" value=1>
+        <p>z: </p><input id="z" value=2>
+
+        <p>r: </p><input id="r" value=0>
+        <p>p: </p><input id="p" value=0>
+        <p>y: </p><input id="y" value=0>
+        <button onclick="addTransformFromInput()">Add Transform</button>
+
+
 	</body>
 </html>
