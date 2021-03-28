@@ -37,9 +37,6 @@
                 -1px  1px 0 #000,
                 -1px  0   0 #000;
             }
-            #labels>div:hover {
-              color: red;
-            }
 
 		</style>
 	</head>
@@ -186,7 +183,8 @@
             const worldToA = tfObjectA.getWorldToSelfTf();
             const worldToB = tfObjectB.getWorldToSelfTf();
             const aToB = new THREE.Matrix4();
-            aToB.multiplyMatrices(worldToA.inverse(), worldToB);
+            console.log(worldToA);
+            aToB.multiplyMatrices(worldToA.invert(), worldToB);
             return aToB;
         }
 
@@ -234,8 +232,30 @@
 
             }
 
+            function elementsToString(elements) {
+                let string = String(elements);
+                let csv = string.split(",");
+                for (let i = 0; i < 16; i+=4){
+                    csv[i] = "\n" + csv[i];
+                }
+                return csv.join(",");
+            }
+
+
+
+            function getTransformFromInput() {
+	            const menu1 = document.getElementById("tf1");
+	            const menu2 = document.getElementById("tf2");
+	            const tf1Name = menu1.options[menu1.selectedIndex].text;
+                const tf2Name = menu2.options[menu2.selectedIndex].text;
+                const x = getTfBetween(allTfs[tf1Name], allTfs[tf2Name]).transpose();
+                alert(elementsToString(x.elements));
+            }
+
             // Exporting outside the module            
             window.addTransformFromInput = addTransformFromInput;
+            window.getTransformFromInput = getTransformFromInput;
+
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -264,11 +284,22 @@
 
             // Dict of name: TF object (has parent & children)
             let allTfs = {};
-
             
             addTransform("world", undefined, new THREE.Vector3(), new THREE.Quaternion());
+        
+            function addOptionToSelect(select_menu, name) {
+                const menu = document.getElementById(select_menu);
+                let option = document.createElement("option");
+                option.id = name;
+                option.text = name;
+                option.value = name;
+                if (menu.options.namedItem(name) == null) {
+                    menu.add(option);
+                }
+            }
 
 
+         
 /////////////////////////////////////////////
             function animate() {
 	            requestAnimationFrame( animate );
@@ -278,16 +309,14 @@
                 for (var name in allTfs) {
                     // Update label location
                     allTfs[name].text.updatePosition();
-
+                    addOptionToSelect("ref_frame_select", name);
+                    addOptionToSelect("tf1", name);
+                    addOptionToSelect("tf2", name);
+                    
                     // Add to dropdown box
-                    const refFrameSelect = document.getElementById("ref_frame_select");
-                    let option = document.createElement("option");
-                    option.id = name;
-                    option.text = name;
-                    option.value = name;
-                    if (refFrameSelect.options.namedItem(name) == null) {
-                        refFrameSelect.add(option);
-                    }
+                    const resultContainer = document.getElementById("result");
+
+
                 }
             }
             animate();
@@ -295,7 +324,7 @@
         
         <!-- HTML -->
 
-        <p>Name: </p><input id="name" value="name">
+        <p>Name: </p><input id="name" value="robot">
         <p>Reference frame: </p><select name="Reference frame" id="ref_frame_select">
         </select>
         <br/>
@@ -305,6 +334,12 @@
 <br/>
         <button onclick="addTransformFromInput()">Add Transform</button>
 
+        <br/>
+        Get transform between <select name="TF1" id="tf1"></select> and <select name="TF2" id="tf2"></select>
+
+        <button onclick="getTransformFromInput()">Get Transform</button>
+
+        <div id="result"> Result: </div>
   <div id="container">
     <div id="labels"></div>
   </div>
